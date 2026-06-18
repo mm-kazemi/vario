@@ -13,7 +13,14 @@ export function ProductFilters() {
   // Read initial values from URL
   const currentQ = searchParams.get('q') || '';
   const currentCategory = searchParams.get('category') || '';
-  const currentSort = searchParams.get('sortBy') || '';
+  
+  // Mentor Note: URL as the Single Source of Truth
+  // To keep the UI in sync, we must reconstruct the complex `<select>` value 
+  // from the raw URL parameters (`sortBy` and `order`). This ensures that if a user 
+  // shares a link like `?sortBy=price&order=asc`, the dropdown correctly displays "Price: Low to High".
+  const sortByParam = searchParams.get('sortBy');
+  const orderParam = searchParams.get('order');
+  const currentSort = sortByParam && orderParam ? `${sortByParam}-${orderParam}` : '';
 
   // Local state for search input to allow fluid typing before debouncing
   const [localSearch, setLocalSearch] = useState(currentQ);

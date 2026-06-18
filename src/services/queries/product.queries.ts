@@ -37,33 +37,41 @@ export const useProducts = (params: ProductQueryParams) => {
     
     // Mentor Note: Data Transformation via `select`
     // In enterprise scenarios, you rarely control the third-party APIs you consume.
-    // If an API returns noisy data (like DummyJSON searching descriptions instead of just titles),
-    // you MUST NOT pollute your UI presentation components with complex filtering logic.
+    // If an API returns noisy data or has mutually exclusive endpoints (like DummyJSON 
+    // forcing us to choose between `/search` or `/category`), we MUST perform 
+    // Client-Side Post-Processing to fill the gap.
     // 
     // React Query's `select` option is the perfect place to sanitize and transform data.
-    // WHY? React Query intelligently memoizes the result of the `select` function. 
-    // It only re-runs the filter if the raw `data` returned from the API actually changes.
-    // This provides a highly performant, clean separation of concerns, giving our UI components 
-    // pure, pre-filtered data to render without unnecessary calculation cycles.
+    // It memoizes the result, meaning it only re-runs the filter if the raw `data` 
+    // returned from the API changes. This prevents unnecessary recalculations during standard UI re-renders.
     select: (data) => {
+      let filteredProducts = data.products;
+
+      // 1. Post-process Category filter (in case the API ignored it because we used the /search endpoint)
+      if (params.category && params.category !== 'all') {
+        filteredProducts = filteredProducts.filter(
+          (product) => product.category === params.category
+        );
+      }
+
+      // 2. Post-process Title search (in case the API returned noisy substring matches, or we used the /category endpoint)
       if (params.q && params.q.trim() !== '') {
         const queryLower = params.q.trim().toLowerCase();
-        
-        // Strictly filter to ensure the query is found in the title
-        const filteredProducts = data.products.filter((product) =>
+        filteredProducts = filteredProducts.filter((product) =>
           product.title.toLowerCase().includes(queryLower)
         );
-
-        return {
-          ...data,
-          products: filteredProducts,
-          // Update the total to reflect the locally filtered array length
-          total: filteredProducts.length,
-        };
       }
-      
-      // If no search query, return raw data untouched
-      return data;
+
+      // If no filtering was actually needed, return the original object reference
+      if (filteredProducts.length === data.products.length) {
+        return data;
+      }
+
+      return {
+        ...data,
+        products: filteredProducts,
+        total: filteredProducts.length,
+      };
     },
   });
 };
