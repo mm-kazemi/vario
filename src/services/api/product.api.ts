@@ -26,35 +26,39 @@ export interface Category {
 export const getProducts = async (params: ProductQueryParams = {}): Promise<ProductsResponse> => {
   const { q, category, limit, skip, sortBy, order } = params;
 
-  // Mentor Note: Dynamic REST Endpoint Routing
-  // WHY ARE WE DOING THIS? 
-  // In many external REST APIs (like DummyJSON), text search and filtering are not 
-  // universally handled by a single `/products` endpoint via query parameters. 
-  // Instead, the API architecture dictates separate endpoints:
+  // Mentor Note: Handling Mutually Exclusive Endpoints & Safe Query Parameters
+  // In many real-world REST APIs, text search and category filtering are mutually exclusive 
+  // operations with distinct architectural endpoints. DummyJSON strictly separates them:
+  // - Search: `/products/search?q={query}`
+  // - Category: `/products/category/{categoryName}`
   // - Base: `/products`
-  // - Search: `/products/search?q=phone`
-  // - Category: `/products/category/smartphones`
-  //
-  // The Bug: We were sending `q=essen` to the base `/products` endpoint, which ignored it.
-  // The Fix: We intercept the query parameters before constructing the request. 
-  // If `q` exists and is not empty, we dynamically rewrite the base URL to `/products/search`. 
-  // This is an extremely common enterprise pattern: abstracting the quirks of external APIs 
-  // inside your service layer so your UI components remain blissfully ignorant.
+  // 
+  // We prioritize text search. If a user types a query, we drop the category filter and hit 
+  // the `/search` endpoint. If they clear the search, we hit the category endpoint (if selected).
+  // 
+  // Why `URLSearchParams`? 
+  // Enterprise apps NEVER construct query strings via manual concatenation (e.g., `?q=${q}&limit=${limit}`).
+  // That approach is highly prone to malformed URLs and injection bugs (e.g., if a search query contains `&` or `=`).
+  // `URLSearchParams` natively handles URL-encoding (converting spaces to `%20`, ampersands to `%26`, etc.) 
+  // and cleanly handles undefined or null parameters, ensuring a robust, error-free URL.
   
   let basePath = '/products';
   
+  // Endpoint Priority Logic
   if (q && q.trim() !== '') {
     basePath = '/products/search';
-  } else if (category) {
-    // DummyJSON does not natively support combining category and search endpoints.
-    // If both exist somehow, search takes priority. Otherwise, use the category endpoint.
+  } else if (category && category !== 'all') {
     basePath = `/products/category/${category}`;
   }
 
-  // Construct URLSearchParams safely
+  // Parameter Construction using native URLSearchParams
   const queryParams = new URLSearchParams();
   
-  if (q && q.trim() !== '') queryParams.append('q', q.trim());
+  // Only append 'q' if we are actually using the search endpoint
+  if (q && q.trim() !== '') {
+    queryParams.append('q', q.trim());
+  }
+  
   if (limit !== undefined) queryParams.append('limit', limit.toString());
   if (skip !== undefined) queryParams.append('skip', skip.toString());
   if (sortBy) queryParams.append('sortBy', sortBy);
