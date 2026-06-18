@@ -14,14 +14,15 @@ export function ProductList() {
   
   // Dynamically build the query parameters from the URL
   // We provide fallbacks (like limit: 12) so the UI is predictable.
-  const queryParams = {
+  // Mentor Note: We wrap this in useMemo so the object reference remains stable across renders unless the URL actually changes.
+  const queryParams = React.useMemo(() => ({
     q: searchParams.get('q') || undefined,
     category: searchParams.get('category') || undefined,
     sortBy: searchParams.get('sortBy') || undefined,
     order: (searchParams.get('order') as 'asc' | 'desc') || undefined,
     skip: parseInt(searchParams.get('skip') || '0', 10),
     limit: parseInt(searchParams.get('limit') || '12', 10),
-  };
+  }), [searchParams]);
 
   const { data, isLoading, isError, refetch } = useProducts(queryParams);
 

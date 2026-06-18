@@ -2,17 +2,20 @@ import { useQuery } from '@tanstack/react-query';
 import { getProducts, getCategories, getProductById } from '../api/product.api';
 import { ProductQueryParams } from '@/types/product.types';
 
-// Mentor Note:
-// Query Keys are fundamentally how React Query caches and invalidates data.
-// In an enterprise app, we use a structured array pattern for Query Keys. 
-// The first element is the domain ('products'), the second is the specific entity ('list' or 'categories'), 
-// and the third is the dependency object (the query params).
-// WHY? 
-// 1. Cache Collisions: If we just used `['products']` for everything, changing the page number would 
-//    overwrite the cache for page 1! By including the `params` object in the array, React Query 
-//    automatically creates a separate, unique cache entry for EVERY combination of search/filter/pagination.
-// 2. Precise Invalidation: If an admin adds a new product, we can invalidate `['products', 'list']` 
-//    to refresh all product lists, regardless of their specific parameters.
+// Mentor Note: Query Key Dependencies
+// React Query acts as a global cache. When you use a query key like `['products']`, 
+// React Query fetches the data and caches it under that key.
+// 
+// The Stale Data Bug: If we used a static key like `['products']`, and the user changed the search query 
+// (e.g. URL updates to `?q=essen`), the component would re-render, BUT React Query would see `['products']`, 
+// recognize that it already has cached data for that key, and immediately return the stale (unfiltered) data 
+// without triggering a new network request!
+//
+// The Fix: "Query Key Dependencies". A query key must be treated exactly like a React `useEffect` dependency array. 
+// Every variable that is used inside the `queryFn` MUST be included in the `queryKey`. 
+// By including the `params` object (e.g., `['products', 'list', params]`), React Query creates a 
+// mathematically unique cache entry for every distinct combination of search/filter/pagination state. 
+// When the URL changes, `params` changes, the query key changes, and React Query instantly triggers a fresh fetch.
 
 export const productQueryKeys = {
   all: ['products'] as const,
