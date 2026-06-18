@@ -4,8 +4,8 @@ import React, { useState } from 'react';
 import { useProduct } from '@/services/queries/product.queries';
 import { Button } from '@/components/common/Button';
 import Link from 'next/link';
-import { useAppDispatch } from '@/store/hooks';
-import { addToCart } from '@/store/slices/cartSlice';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { addToCart, removeFromCart, updateQuantity } from '@/store/slices/cartSlice';
 
 interface ProductDetailsProps {
   id: string;
@@ -15,6 +15,30 @@ export function ProductDetails({ id }: ProductDetailsProps) {
   const dispatch = useAppDispatch();
   const { data: product, isLoading, isError, refetch } = useProduct(id);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // Mentor Note: State-Driven UI Consistency
+  // A core principle of modern frontend architecture is "Single Source of Truth".
+  // If a user adds an item to the cart from the grid, and then clicks into the details page,
+  // the details page MUST reflect that state. Otherwise, the user assumes the action failed,
+  // clicks "Add to Cart" again, and accidentally orders 2 items. By reading from the global 
+  // Redux store here, we guarantee identical, consistent UI behavior across the entire application.
+  
+  const cartItem = useAppSelector((state) => state.cart.items.find(item => item.product.id === product?.id));
+  const currentQuantity = cartItem?.quantity || 0;
+
+  const handleDecrement = () => {
+    if (!product) return;
+    if (currentQuantity === 1) {
+      dispatch(removeFromCart(product.id));
+    } else {
+      dispatch(updateQuantity({ id: product.id, quantity: currentQuantity - 1 }));
+    }
+  };
+
+  const handleIncrement = () => {
+    if (!product) return;
+    dispatch(updateQuantity({ id: product.id, quantity: currentQuantity + 1 }));
+  };
 
   if (isLoading) {
     return (
@@ -143,17 +167,37 @@ export function ProductDetails({ id }: ProductDetailsProps) {
 
         {/* Add to Cart Actions */}
         <div className="mt-auto border-t border-neutral-200 pt-8 flex gap-4">
-          <Button 
-            variant="primary" 
-            className="flex-1 py-4 text-lg"
-            onClick={() => {
-              dispatch(addToCart(product));
-              // Optionally we could show a toast notification here
-            }}
-          >
-            Add to Cart
-          </Button>
-          <Button variant="outline" className="px-6">
+          {currentQuantity > 0 ? (
+            <div className="flex-1 flex items-center rounded-xl border-2 border-black bg-white overflow-hidden transition-all shadow-sm h-[60px]">
+              <button 
+                onClick={handleDecrement}
+                className="w-16 h-full flex items-center justify-center hover:bg-neutral-100 text-black font-medium transition-colors"
+                aria-label="Decrease quantity"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12H4" /></svg>
+              </button>
+              <span className="flex-1 text-center text-xl font-bold text-black border-x border-neutral-200">
+                {currentQuantity}
+              </span>
+              <button 
+                onClick={handleIncrement}
+                className="w-16 h-full flex items-center justify-center hover:bg-neutral-100 text-black font-medium transition-colors"
+                aria-label="Increase quantity"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+              </button>
+            </div>
+          ) : (
+            <Button 
+              variant="primary" 
+              className="flex-1 py-4 text-lg h-[60px]"
+              onClick={() => dispatch(addToCart(product))}
+            >
+              Add to Cart
+            </Button>
+          )}
+
+          <Button variant="outline" className="px-6 h-[60px]">
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
