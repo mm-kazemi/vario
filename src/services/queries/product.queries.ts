@@ -35,42 +35,74 @@ export const useProducts = (params: ProductQueryParams) => {
     queryKey: productQueryKeys.list(params),
     queryFn: () => getProducts(params),
     
-    // Mentor Note: Data Transformation via `select`
-    // In enterprise scenarios, you rarely control the third-party APIs you consume.
-    // If an API returns noisy data or has mutually exclusive endpoints (like DummyJSON 
-    // forcing us to choose between `/search` or `/category`), we MUST perform 
-    // Client-Side Post-Processing to fill the gap.
+    // Mentor Note: Client-Side Data Engine (Mock BFF Pattern)
+    // Client-Side Filtering on Paginated Server Data is a massive anti-pattern.
+    // If a server returns Page 1 (items 1-30), and you filter out 25 items on the client, 
+    // your user only sees 5 items on Page 1, while Page 2 might have 20 matching items.
+    // The dataset becomes fractured, pagination breaks, and search results are inaccurate.
     // 
-    // React Query's `select` option is the perfect place to sanitize and transform data.
-    // It memoizes the result, meaning it only re-runs the filter if the raw `data` 
-    // returned from the API changes. This prevents unnecessary recalculations during standard UI re-renders.
+    // To fix this for DummyJSON, we fetched the ENTIRE catalog (`limit=0`) into React Query's cache.
+    // Now, we use the `select` function as a complete "Data Engine" to sequentially:
+    // 1. Filter by Category
+    // 2. Filter by Search Query
+    // 3. Sort the remaining items
+    // 4. Paginate the exact slice for the UI
+    // 
+    // This perfectly mimics a competent Backend-For-Frontend (BFF) and guarantees 
+    // our UI receives flawless, predictable data arrays.
     select: (data) => {
-      let filteredProducts = data.products;
+      // Create a shallow copy to safely mutate via sort
+      let processedProducts = [...data.products];
 
-      // 1. Post-process Category filter (in case the API ignored it because we used the /search endpoint)
+      // a. Category Filter
       if (params.category && params.category !== 'all') {
-        filteredProducts = filteredProducts.filter(
+        processedProducts = processedProducts.filter(
           (product) => product.category === params.category
         );
       }
 
-      // 2. Post-process Title search (in case the API returned noisy substring matches, or we used the /category endpoint)
+      // b. Search Filter
       if (params.q && params.q.trim() !== '') {
         const queryLower = params.q.trim().toLowerCase();
-        filteredProducts = filteredProducts.filter((product) =>
+        processedProducts = processedProducts.filter((product) =>
           product.title.toLowerCase().includes(queryLower)
         );
       }
 
-      // If no filtering was actually needed, return the original object reference
-      if (filteredProducts.length === data.products.length) {
-        return data;
+      // c. Sorting
+      if (params.sortBy) {
+        processedProducts.sort((a, b) => {
+          let valA = a[params.sortBy as keyof typeof a];
+          let valB = b[params.sortBy as keyof typeof b];
+
+          if (typeof valA === 'string' && typeof valB === 'string') {
+            valA = valA.toLowerCase();
+            valB = valB.toLowerCase();
+            if (valA < valB) return params.order === 'desc' ? 1 : -1;
+            if (valA > valB) return params.order === 'desc' ? -1 : 1;
+            return 0;
+          }
+
+          if (typeof valA === 'number' && typeof valB === 'number') {
+            return params.order === 'desc' ? valB - valA : valA - valB;
+          }
+
+          return 0;
+        });
       }
+
+      // d. Pagination
+      const total = processedProducts.length;
+      const skip = params.skip || 0;
+      const limit = params.limit || 12;
+      const paginatedProducts = processedProducts.slice(skip, skip + limit);
 
       return {
         ...data,
-        products: filteredProducts,
-        total: filteredProducts.length,
+        products: paginatedProducts,
+        total,
+        skip,
+        limit,
       };
     },
   });

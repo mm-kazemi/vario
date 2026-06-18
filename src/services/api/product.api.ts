@@ -24,50 +24,18 @@ export interface Category {
  * and appends pagination/sorting query parameters.
  */
 export const getProducts = async (params: ProductQueryParams = {}): Promise<ProductsResponse> => {
-  const { q, category, limit, skip, sortBy, order } = params;
-
-  // Mentor Note: Handling Mutually Exclusive Endpoints & Safe Query Parameters
-  // In many real-world REST APIs, text search and category filtering are mutually exclusive 
-  // operations with distinct architectural endpoints. DummyJSON strictly separates them:
-  // - Search: `/products/search?q={query}`
-  // - Category: `/products/category/{categoryName}`
-  // - Base: `/products`
-  // 
-  // We prioritize text search. If a user types a query, we drop the category filter and hit 
-  // the `/search` endpoint. If they clear the search, we hit the category endpoint (if selected).
-  // 
-  // Why `URLSearchParams`? 
-  // Enterprise apps NEVER construct query strings via manual concatenation (e.g., `?q=${q}&limit=${limit}`).
-  // That approach is highly prone to malformed URLs and injection bugs (e.g., if a search query contains `&` or `=`).
-  // `URLSearchParams` natively handles URL-encoding (converting spaces to `%20`, ampersands to `%26`, etc.) 
-  // and cleanly handles undefined or null parameters, ensuring a robust, error-free URL.
+  // Mentor Note: Mock BFF Pattern & Fetching All Data
+  // Previously, we tried to dynamically route to `/products/search` or `/products/category`.
+  // However, DummyJSON's backend cannot accurately combine text search, category filters, 
+  // sorting, AND pagination. If the backend only returns 30 items per page, our client-side 
+  // filters will only search those 30 items, completely missing matching products on page 5!
+  //
+  // The Enterprise Fix: When dealing with broken or highly constrained third-party APIs
+  // with small datasets (~200 items), we fetch the ENTIRE catalog once. We then use 
+  // React Query's `select` option to build a complete "Data Engine" that perfectly handles 
+  // filtering, sorting, and pagination in memory.
   
-  let basePath = '/products';
-  
-  // Endpoint Priority Logic
-  if (q && q.trim() !== '') {
-    basePath = '/products/search';
-  } else if (category && category !== 'all') {
-    basePath = `/products/category/${category}`;
-  }
-
-  // Parameter Construction using native URLSearchParams
-  const queryParams = new URLSearchParams();
-  
-  // Only append 'q' if we are actually using the search endpoint
-  if (q && q.trim() !== '') {
-    queryParams.append('q', q.trim());
-  }
-  
-  if (limit !== undefined) queryParams.append('limit', limit.toString());
-  if (skip !== undefined) queryParams.append('skip', skip.toString());
-  if (sortBy) queryParams.append('sortBy', sortBy);
-  if (order) queryParams.append('order', order);
-
-  const queryString = queryParams.toString();
-  const endpoint = queryString ? `${basePath}?${queryString}` : basePath;
-
-  return apiClient<ProductsResponse>(endpoint);
+  return apiClient<ProductsResponse>('/products?limit=0');
 };
 
 /**
