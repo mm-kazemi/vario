@@ -26,20 +26,35 @@ export interface Category {
 export const getProducts = async (params: ProductQueryParams = {}): Promise<ProductsResponse> => {
   const { q, category, limit, skip, sortBy, order } = params;
 
-  // Determine the base path based on search or category
+  // Mentor Note: Dynamic REST Endpoint Routing
+  // WHY ARE WE DOING THIS? 
+  // In many external REST APIs (like DummyJSON), text search and filtering are not 
+  // universally handled by a single `/products` endpoint via query parameters. 
+  // Instead, the API architecture dictates separate endpoints:
+  // - Base: `/products`
+  // - Search: `/products/search?q=phone`
+  // - Category: `/products/category/smartphones`
+  //
+  // The Bug: We were sending `q=essen` to the base `/products` endpoint, which ignored it.
+  // The Fix: We intercept the query parameters before constructing the request. 
+  // If `q` exists and is not empty, we dynamically rewrite the base URL to `/products/search`. 
+  // This is an extremely common enterprise pattern: abstracting the quirks of external APIs 
+  // inside your service layer so your UI components remain blissfully ignorant.
+  
   let basePath = '/products';
-  if (q) {
+  
+  if (q && q.trim() !== '') {
     basePath = '/products/search';
   } else if (category) {
-    // Note: DummyJSON doesn't support search and category simultaneously in a single endpoint out of the box,
-    // so we prioritize search if both happen to be present.
+    // DummyJSON does not natively support combining category and search endpoints.
+    // If both exist somehow, search takes priority. Otherwise, use the category endpoint.
     basePath = `/products/category/${category}`;
   }
 
   // Construct URLSearchParams safely
   const queryParams = new URLSearchParams();
   
-  if (q) queryParams.append('q', q);
+  if (q && q.trim() !== '') queryParams.append('q', q.trim());
   if (limit !== undefined) queryParams.append('limit', limit.toString());
   if (skip !== undefined) queryParams.append('skip', skip.toString());
   if (sortBy) queryParams.append('sortBy', sortBy);
